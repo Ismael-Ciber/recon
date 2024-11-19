@@ -1,6 +1,6 @@
 #!/bin/bash
 
-figlet -f slant suprimoware
+figlet -f slant illoware
 if [ -z "$1" ]; then
     echo "Error: No enviaste un dominio"
     echo "Uso: ./main.sh <dominio>"
@@ -30,20 +30,32 @@ dig +short SOA "$dominio" > "$ruta_resultados/clean/SOA"
 dig +short txt _dmarc.$dominio > "$ruta_resultados/clean/DMARC"
 dig +short txt default._domainkey.$dominio > "$ruta_resultados/clean/DKIM"
 
+## Extracción de rangos de IP
+
+#echo 195.53.40.0-195.53.41.255 | mapcidr -silent | dnsx -ptr -resp-only
+
+## Con NMAP
+
+sudo nmap -sS -Pn -sV -sC -O -vv --open --reason --min-hostgroup 16 --min-rate 100 --max-parallelism=10 -F -oA "$ruta_resultados/raw/NMAP" $domain
+
 ## Con KATANA
 
 katana -u "$dominio" > "$ruta_resultados/raw/katana"
-katana -u "$dominio" | sort -u | httpx -silent >> "$ruta_resultados/clean/paths"
+cat "$ruta_resultados/raw/katana" | sort -u | httpx -silent >> "$ruta_resultados/clean/paths"
 
 ## Con CTFR
 
 #ctfr -d "$dominio" -o "$ruta_resultados/raw/ctfr"
-#cat "$ruta_resultados/raw/ctfr" | sort -u | httpx -silent >> "$ruta_resultados/clean/paths"
+#cat "$ruta_resultados/raw/ctfr" | sort -u | httpx -silent >> "$ruta_resultados/clean/subdominios"
 
 ## Con GAU
 
 gau "$dominio" > "$ruta_resultados/raw/gau"
-gau "$dominio" | sort -u | httpx -silent  >> "$ruta_resultados/clean/dominios"
+cat "$ruta_resultados/raw/gau" | sort -u | httpx -silent  >> "$ruta_resultados/clean/dominios"
+
+## Hacemos una nueva limpieza de duplicados y juntamos todos los ficheros limpios en uno
+
+cat "$ruta_resultados/clean/paths" "$ruta_resultados/clean/dominios" "$ruta_resultados/clean/subdominios" | sort -u > "$ruta_resultados/clean/todos_resultados"
 
 echo "Extrayendo rangos de IP"
 while IFS= read -r ip; do
@@ -104,3 +116,7 @@ agregar_registros "DKIM"
 
 # Generar el mapa mental con markmap
 markmap "resultado.md" --no-open
+
+## Uso gowitness para tomar capturas de pantalla de los resultados de "todos_resultados"
+
+gowitness scan file -f "$ruta_resultados/clean/todos_resultados" --save-content --write-csv
